@@ -23,7 +23,7 @@ OBJS    := $(SRCS:.c=.o)
 
 
 #以下是编译选项
-CFLAGS  := -g -Wall -c $(INCLUDE) $(LIBPATH) 
+CFLAGS  := -g -Wall -O3 -c $(INCLUDE) $(LIBPATH) 
 CFLAGS  += -DLINUX 
 
 TARGETLIB := libjson.a

@@ -39,12 +39,6 @@ extern "C"
 	
 #define cJSON_IsReference 256
 
-#if __WORDSIZE == 64  
-typedef unsigned long int  uint64;  
-#else  
-__extension__  
-typedef unsigned long long int  uint64; 
-#endif
 
 typedef unsigned int uint;
 
@@ -54,13 +48,13 @@ typedef struct cJSON {
 	struct cJSON *child;		/* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */
 
 	int type;					/* The type of the item, as above. */
-
+	
 	char *valuestring;			/* The item's string, if type==cJSON_String */
 	int valueint;				/* The item's number, if type==cJSON_Number */
 	double valuedouble;			/* The item's number, if type==cJSON_Number */
 	uint valueuint;             /* The item's number, if type==cJSON_Number */
-	uint64 valueuint64;         /* The item's number, if type==cJSON_Number */
 	char *string;				/* The item's name string, if this item is the child of, or is in the list of subitems of an object. */
+	int hash_string;            /* the hash code for string, for compare fast*/
 } cJSON;
 
 typedef struct cJSON_Hooks {
@@ -75,9 +69,9 @@ extern void cJSON_InitHooks(cJSON_Hooks* hooks);
 /* Supply a block of JSON, and this returns a cJSON object you can interrogate. Call cJSON_Delete when finished. */
 extern cJSON *cJSON_Parse(const char *value);
 /* Render a cJSON entity to text for transfer/storage. Free the char* when finished. */
-extern char  *cJSON_Print(cJSON *item);
+extern char  *cJSON_Print(cJSON *item,int padding=0, int estimate=16*1024);
 /* Render a cJSON entity to text for transfer/storage without any formatting. Free the char* when finished. */
-extern char  *cJSON_PrintUnformatted(cJSON *item);
+extern char  *cJSON_PrintUnformatted(cJSON *item,int padding=0, int estimate=16*1024);
 /* Delete a cJSON entity and all subentities. */
 extern void   cJSON_Delete(cJSON *c);
 
@@ -131,6 +125,14 @@ extern void cJSON_ReplaceItemInObject(cJSON *object,const char *string,cJSON *ne
 #define cJSON_AddFalseToObject(object,name)		cJSON_AddItemToObject(object, name, cJSON_CreateFalse())
 #define cJSON_AddNumberToObject(object,name,n)	cJSON_AddItemToObject(object, name, cJSON_CreateNumber(n))
 #define cJSON_AddStringToObject(object,name,s)	cJSON_AddItemToObject(object, name, cJSON_CreateString(s))
+
+#define cJSON_IsObject(c) (c&&c->type==cJSON_Object)
+#define cJSON_IsBool(c) (c&&(c->type==cJSON_False||c->type==cJSON_True))
+#define cJSON_IsNumber(c) (c&&c->type==cJSON_Number)
+#define cJSON_IsArray(c) (c&&c->type==cJSON_Array)
+#define cJSON_IsString(c) (c&&c->type==cJSON_String)
+#define cJSON_IsNull(c) (c&&c->type==cJSON_NULL)
+#define cJSON_IsValid(c) (c)
 
 #ifdef __cplusplus
 }
