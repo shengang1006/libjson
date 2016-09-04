@@ -71,7 +71,7 @@ static int cJSON_Buf_Check(cJSON_Buf*buf, int len){
 static char* cJSON_Buf_Copy_Str(cJSON_Buf*buf,const char * str){
 	int len =strlen(str);
 	if(cJSON_Buf_Check(buf,len)<0)return 0;
-	stpcpy(buf->buf + buf->offset,str);
+	strcpy(buf->buf + buf->offset,str);
 	buf->offset +=len;
 	return buf->buf;
 }
