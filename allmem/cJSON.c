@@ -204,6 +204,8 @@ static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 		else
 		{
 			ptr++;
+			if(!*ptr){return 0;}//bug
+
 			switch (*ptr)
 			{
 				case 'b': *ptr2++='\b';	break;
@@ -212,15 +214,19 @@ static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 				case 'r': *ptr2++='\r';	break;
 				case 't': *ptr2++='\t';	break;
 				case 'u':	 /* transcode utf16 to utf8. DOES NOT SUPPORT SURROGATE PAIRS CORRECTLY. */
-					sscanf(ptr+1,"%4x",&uc);	/* get the unicode char. */
-					len=3;if (uc<0x80) len=1;else if (uc<0x800) len=2;ptr2+=len;
-					
-					switch (len) {
-						case 3: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
-						case 2: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
-						case 1: *--ptr2 =(uc | firstByteMark[len]);
+					if(*(ptr+1)&&*(ptr+2)&&*(ptr+3)&&*(ptr+4)){
+						sscanf(ptr+1,"%4x",&uc);	/* get the unicode char. */
+						len=3;if (uc<0x80) len=1;else if (uc<0x800) len=2;ptr2+=len;				
+						switch (len) {
+							case 3: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
+							case 2: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
+							case 1: *--ptr2 =(uc | firstByteMark[len]);
+						}
+						ptr2+=len;ptr+=4;
 					}
-					ptr2+=len;ptr+=4;
+					else{
+						return 0;
+					}
 					break;
 				default:  *ptr2++=*ptr; break;
 			}

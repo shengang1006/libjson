@@ -42,11 +42,9 @@ extern "C"
 typedef struct cJSON {
 	struct cJSON *next,*prev;	/* next/prev allow you to walk array/object chains. Alternatively, use GetArraySize/GetArrayItem/GetObjectItem */
 	int type;					/* The type of the item, as above. */
-	union{
-		struct cJSON *child;	/* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */
-		char *valuestring;		/* The item's string, if type==cJSON_String */
-		double valuedouble;		/* The item's number, if type==cJSON_Number */
-	};
+	struct cJSON *child;	    /* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */
+	char *valuestring;		    /* The item's string, if type==cJSON_String */
+	double valuedouble;		    /* The item's number, if type==cJSON_Number */
 	char *string;				/* The item's name string, if this item is the child of, or is in the list of subitems of an object. */
 	int hash_string;            /* the hash code for string, for compare fast*/
 	int allocate_type;
