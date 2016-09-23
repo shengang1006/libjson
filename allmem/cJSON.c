@@ -165,7 +165,7 @@ static const char *parse_number(cJSON *item,const char *num)
 	if (*num=='-') sign=-1,num++;	/* Has sign? */
 	if (*num=='0') num++;			/* is zero */
 	if (*num>='1' && *num<='9')	do	n=(n*10.0)+(*num++ -'0');	while (*num>='0' && *num<='9');	/* Number? */
-	if (*num=='.') {num++;		do	n=(n*10.0)+(*num++ -'0'),scale--; while (*num>='0' && *num<='9');}	/* Fractional part? */
+	if (*num=='.'&& num[1]>='0' && num[1]<='9') {num++;	do	n=(n*10.0)+(*num++ -'0'),scale--; while (*num>='0' && *num<='9');}	/* Fractional part? */
 	if (*num=='e' || *num=='E')		/* Exponent? */
 	{	num++;if (*num=='+') num++;	else if (*num=='-') signsubscale=-1,num++;		/* With sign? */
 		while (*num>='0' && *num<='9') subscale=(subscale*10)+(*num++ - '0');	/* Number? */
@@ -183,18 +183,35 @@ static char *print_number(cJSON *item,cJSON_Buf* buf)
 {
 	char str[64];
 	double d=item->valuedouble;
-	if (fabs(floor(d)-d)<=DBL_EPSILON)			sprintf(str,"%.0f",d);
-	else if (fabs(d)<1.0e-6 || fabs(d)>1.0e9)	sprintf(str,"%e",d);
-	else										sprintf(str,"%f",d);
+
+	if (d*0!=0)												sprintf(str,"null");	/* This checks for NaN and Infinity */
+	if (fabs(floor(d)-d)<=DBL_EPSILON && fabs(d)<1.0e60)	sprintf(str,"%.0f",d);
+	else if (fabs(d)<1.0e-6 || fabs(d)>1.0e9)				sprintf(str,"%e",d);
+	else													sprintf(str,"%f",d);
 	if(!cJSON_Buf_Copy_Str(buf,str))return 0;
 	return buf->buf;
+}
+
+static unsigned parse_hex4(const char *str)
+{
+	unsigned h=0;
+	int len =4 ;
+	while(len--){
+		h=h<<4;
+		if (*str>='0' && *str<='9') h+=(*str)-'0'; 
+		else if (*str>='A' && *str<='F') h+=10+(*str)-'A'; 
+		else if (*str>='a' && *str<='f') h+=10+(*str)-'a'; 
+		else return 0;
+		str++;
+	}
+	return h;
 }
 
 /* Parse the input text into an unescaped cstring, and populate item. */
 static const unsigned char firstByteMark[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
 static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 {
-	const char *ptr=str+1;char *ptr2,*src;int len=0;unsigned uc;
+	const char *ptr=str+1;char *ptr2,*src;int len=0;unsigned uc,uc2;;
 	if (*str!='\"') {ep=str;return 0;}	/* not a string! */
 	
 	ptr=str+1;src=ptr2=buf->buf+buf->offset;
@@ -204,29 +221,34 @@ static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 		else
 		{
 			ptr++;
-			if(!*ptr){return 0;}//bug
-
 			switch (*ptr)
 			{
+				case   0: return 0;
 				case 'b': *ptr2++='\b';	break;
 				case 'f': *ptr2++='\f';	break;
 				case 'n': *ptr2++='\n';	break;
 				case 'r': *ptr2++='\r';	break;
 				case 't': *ptr2++='\t';	break;
 				case 'u':	 /* transcode utf16 to utf8. DOES NOT SUPPORT SURROGATE PAIRS CORRECTLY. */
-					if(*(ptr+1)&&*(ptr+2)&&*(ptr+3)&&*(ptr+4)){
-						sscanf(ptr+1,"%4x",&uc);	/* get the unicode char. */
-						len=3;if (uc<0x80) len=1;else if (uc<0x800) len=2;ptr2+=len;				
-						switch (len) {
-							case 3: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
-							case 2: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
-							case 1: *--ptr2 =(uc | firstByteMark[len]);
-						}
-						ptr2+=len;ptr+=4;
+					uc=parse_hex4(ptr+1);
+					if ((uc>=0xDC00 && uc<=0xDFFF)||uc==0){ep=str;return 0;}	/* check for invalid.   */
+					ptr+=4;
+					if (uc>=0xD800 && uc<=0xDBFF)	/* UTF16 surrogate pairs.	*/
+					{
+						if (ptr[1]!='\\' || ptr[2]!='u'){ep=str;return 0;};	/* missing second-half of surrogate.    */
+						uc2=parse_hex4(ptr+3);
+						if (uc2<0xDC00 || uc2>0xDFFF){ep=str;return 0;};	/* invalid second-half of surrogate.    */
+						ptr+=6;uc=0x10000 + (((uc&0x3FF)<<10) | (uc2&0x3FF));
 					}
-					else{
-						return 0;
+
+					len=4;if (uc<0x80) len=1;else if (uc<0x800) len=2;else if (uc<0x10000) len=3; ptr2+=len;				
+					switch (len) {
+						case 4: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
+						case 3: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
+						case 2: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
+						case 1: *--ptr2 =(uc | firstByteMark[len]);
 					}
+					ptr2+=len;
 					break;
 				default:  *ptr2++=*ptr; break;
 			}
@@ -275,6 +297,7 @@ static char *print_string_ptr(const char *str,cJSON_Buf* buf)
 static char *print_string(cJSON *item,cJSON_Buf* buf)	{return print_string_ptr(item->valuestring,buf);}
 
 /* Predeclare these prototypes. */
+static const char *parse_root(cJSON *item,const char *value,cJSON_Buf* buf);
 static const char *parse_value(cJSON *item,const char *value,cJSON_Buf* buf);
 static char *print_value(cJSON *item,int depth,int fmt,cJSON_Buf* buf);
 static const char *parse_array(cJSON *item,const char *value,cJSON_Buf* buf);
@@ -299,7 +322,7 @@ cJSON *cJSON_Parse(const char *value)
 		return 0;
 	}
 	c->data=temp.buf;
-	if (!parse_value(c,skip(value),&temp)) {cJSON_Delete(c);return 0;}
+	if (!parse_root(c,skip(value),&temp)) {cJSON_Delete(c);return 0;}
 	return c;
 }
 
@@ -321,6 +344,13 @@ char * print_json(cJSON *item,int fmt,cJSON_Buf*buf){
 char *cJSON_Print(cJSON *item,cJSON_Buf*buf)				{return print_json(item,1,buf);}
 char *cJSON_PrintUnformatted(cJSON *item,cJSON_Buf*buf)	{return print_json(item,0,buf);}
 
+static const char *parse_root(cJSON *item,const char *value,cJSON_Buf* buf){
+	if (!value)						return 0;	/* Fail on null. */
+	if (*value=='{')				{ return parse_object(item,value,buf); }
+	if (*value=='[')				{ return parse_array(item,value,buf); }
+	ep=value;return 0;	/* failure. */
+}
+
 /* Parser core - when encountering text, process appropriately. */
 static const char *parse_value(cJSON *item,const char *value,cJSON_Buf* buf)
 {
@@ -332,8 +362,6 @@ static const char *parse_value(cJSON *item,const char *value,cJSON_Buf* buf)
 	if (!strncmp(value,"null",4))	{ item->type=cJSON_NULL;  return value+4; }
 	if (!strncmp(value,"false",5))	{ item->type=cJSON_False; return value+5; }
 	if (!strncmp(value,"true",4))	{ item->type=cJSON_True; return value+4; }
-
-
 	ep=value;return 0;	/* failure. */
 }
 
