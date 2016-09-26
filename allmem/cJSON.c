@@ -90,7 +90,7 @@ static int BKDRHash(const char *key){
      unsigned int seed =131;  //  31 131 1313 13131 131313 etc..
      unsigned int hash =0 ;
      while(*key){
-         hash=hash*seed+(*key++);
+         hash=hash*seed+tolower(*key++);
      }
      return hash&0x7fffffff;
 }
