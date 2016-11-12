@@ -201,7 +201,7 @@ static unsigned parse_hex4(const char *str)
 		if (*str>='0' && *str<='9') h+=(*str)-'0'; 
 		else if (*str>='A' && *str<='F') h+=10+(*str)-'A'; 
 		else if (*str>='a' && *str<='f') h+=10+(*str)-'a'; 
-		else return 0;
+		else return 0x10000;
 		str++;
 	}
 	return h;
@@ -211,7 +211,7 @@ static unsigned parse_hex4(const char *str)
 static const unsigned char firstByteMark[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
 static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 {
-	const char *ptr=str+1;char *ptr2,*src;int len=0;unsigned uc,uc2;;
+	const char *ptr=str+1;char *ptr2,*src;int len=0;unsigned uc,uc2;
 	if (*str!='\"') {ep=str;return 0;}	/* not a string! */
 	
 	ptr=str+1;src=ptr2=buf->buf+buf->offset;
@@ -231,7 +231,7 @@ static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 				case 't': *ptr2++='\t';	break;
 				case 'u':	 /* transcode utf16 to utf8. DOES NOT SUPPORT SURROGATE PAIRS CORRECTLY. */
 					uc=parse_hex4(ptr+1);
-					if ((uc>=0xDC00 && uc<=0xDFFF)||uc==0){ep=str;return 0;}	/* check for invalid.   */
+					if ((uc>=0xDC00 && uc<=0xDFFF)|| uc==0x10000){ep=str;return 0;}	/* check for invalid.   */
 					ptr+=4;
 					if (uc>=0xD800 && uc<=0xDBFF)	/* UTF16 surrogate pairs.	*/
 					{
@@ -241,7 +241,12 @@ static const char *parse_string(cJSON *item,const char *str,cJSON_Buf*buf)
 						ptr+=6;uc=0x10000 + (((uc&0x3FF)<<10) | (uc2&0x3FF));
 					}
 
-					len=4;if (uc<0x80) len=1;else if (uc<0x800) len=2;else if (uc<0x10000) len=3; ptr2+=len;				
+					len=4;
+					if(uc==0)len =0; /*ignore \u0000*/
+					else if (uc<0x80) len=1;
+					else if (uc<0x800) len=2;
+					else if (uc<0x10000) len=3; 
+					ptr2+=len;				
 					switch (len) {
 						case 4: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
 						case 3: *--ptr2 =((uc | 0x80) & 0xBF); uc >>= 6;
